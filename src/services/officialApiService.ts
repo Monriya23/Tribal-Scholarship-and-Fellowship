@@ -1,6 +1,7 @@
 // Official API Service connecting React Frontend to FastAPI Backend
 
-const API_BASE_URL = 'http://127.0.0.1:8000/api';
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
 
 export interface OfficialSource {
   id: string;
@@ -209,8 +210,8 @@ export class OfficialApiService {
   }
 
   static async reviewPolicyClaim(
-    claimId: string, 
-    action: 'APPROVE' | 'REJECT' | 'UNDER_REVIEW' | 'SET_ACTIVE', 
+    claimId: string,
+    action: 'APPROVE' | 'REJECT' | 'UNDER_REVIEW' | 'SET_ACTIVE',
     reviewerName: string = 'Authorized Policy Officer',
     notes?: string
   ): Promise<PolicyClaimItem> {
@@ -239,9 +240,9 @@ export class OfficialApiService {
   }
 
   static async resolveConflict(
-    conflictId: string, 
-    chosenClaimId: string, 
-    resolverName: string, 
+    conflictId: string,
+    chosenClaimId: string,
+    resolverName: string,
     resolutionNotes: string
   ): Promise<any> {
     const res = await fetch(`${API_BASE_URL}/policy/conflicts/${conflictId}/resolve`, {
@@ -318,9 +319,9 @@ export class OfficialApiService {
   }
 
   static async uploadDocument(
-    file: File, 
-    docType: string, 
-    declaredIncome?: number, 
+    file: File,
+    docType: string,
+    declaredIncome?: number,
     declaredPercentage?: number
   ): Promise<any> {
     const formData = new FormData();
