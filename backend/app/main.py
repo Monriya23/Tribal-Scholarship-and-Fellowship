@@ -6,7 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database.connection import init_db, SessionLocal
 from app.database.models import (
-    Source, SourceDocument, DocumentChunk, Scheme, SchemeVersion, PolicyClaim, User, Student
+    Source, SourceDocument, DocumentChunk, Scheme, SchemeVersion, PolicyClaim, User, Student,
+    Application, Policy, PolicyClause, PolicyRule, PolicyConflict, PolicyException, PolicySnapshot
 )
 from app.security.auth import SecurityAuth
 from app.services.source_registry import SourceRegistryService
@@ -308,62 +309,567 @@ def seed_official_baseline(db):
         }
     ]
 
-    for d_info in official_docs:
-        existing_doc = db.query(SourceDocument).filter(SourceDocument.id == d_info["id"]).first()
-        if not existing_doc:
-            doc_content = "\n\n".join([c["text"] for c in d_info["chunks"]])
-            content_hash = hashlib.sha256(doc_content.encode('utf-8')).hexdigest()
-            
-            doc_obj = SourceDocument(
-                id=d_info["id"],
-                source_id=d_info["source_id"],
-                title=d_info["title"],
-                url=d_info["url"],
-                document_type=d_info["document_type"],
-                mime_type="application/pdf",
-                content_hash=content_hash,
-                published_date="2025-04-01",
-                effective_date="2025-04-01",
-                fetched_at=datetime.datetime.utcnow(),
-                extracted_text=doc_content,
-                status="INDEXED",
-                version=1,
-                chunk_count=len(d_info["chunks"])
+    # 4. Seed Baseline Students & Applications
+    stu_data = [
+        {
+            "id": "stu_pooja_01",
+            "mota_lifetime_id": "ST-CASE-2026-JH-88341",
+            "full_name": "Pooja Munda",
+            "aadhaar_vault_ref": "aadhaar_vault_9921_xxxx",
+            "date_of_birth": "2001-08-14",
+            "gender": "FEMALE",
+            "caste_tribe_name": "Munda",
+            "sub_tribe": "Patar Munda",
+            "is_pvtg": False,
+            "annual_family_income": 280000.0,
+            "district": "Ranchi",
+            "state": "Jharkhand",
+            "mobile": "9876543214",
+            "email": "pooja.munda@student.ac.in",
+            "disability_percent": 0.0
+        },
+        {
+            "id": "stu_birsa_02",
+            "mota_lifetime_id": "ST-CASE-2026-OD-77219",
+            "full_name": "Birsa Soren",
+            "aadhaar_vault_ref": "aadhaar_vault_4412_xxxx",
+            "date_of_birth": "1999-03-22",
+            "gender": "MALE",
+            "caste_tribe_name": "Santhal",
+            "is_pvtg": False,
+            "annual_family_income": 420000.0,
+            "district": "Mayurbhanj",
+            "state": "Odisha",
+            "mobile": "9876543215",
+            "email": "birsa.soren@research.ac.in",
+            "disability_percent": 0.0
+        }
+    ]
+
+    for s_item in stu_data:
+        existing_stu = db.query(Student).filter(Student.id == s_item["id"]).first()
+        if not existing_stu:
+            stu_obj = Student(
+                id=s_item["id"],
+                mota_lifetime_id=s_item["mota_lifetime_id"],
+                full_name=s_item["full_name"],
+                aadhaar_vault_ref=s_item["aadhaar_vault_ref"],
+                date_of_birth=s_item["date_of_birth"],
+                gender=s_item["gender"],
+                caste_tribe_name=s_item["caste_tribe_name"],
+                is_pvtg=s_item["is_pvtg"],
+                annual_family_income=s_item["annual_family_income"],
+                district=s_item["district"],
+                state=s_item["state"],
+                mobile=s_item["mobile"],
+                email=s_item["email"],
+                disability_percent=s_item["disability_percent"]
             )
-            db.add(doc_obj)
+            db.add(stu_obj)
+
+    db.flush()
+
+    app_data = [
+        {
+            "id": "app_nfst_001",
+            "application_no": "TSF-2026-001245",
+            "applicant_id": "stu_pooja_01",
+            "scheme_id": "scheme_nfst",
+            "academic_year": "2025-26",
+            "current_stage": "MINISTRY_SCRUTINY",
+            "declared_income": 280000.0,
+            "declared_percentage": 78.4,
+            "normalized_percentage": 78.4,
+            "course_name": "Ph.D. in Metallurgy & Materials Science",
+            "institute_aishe": "C-12345",
+            "institute_name": "National Institute of Technology, Raipur",
+            "status": "IN_PROGRESS",
+            "evaluated_policy_version": "NFST-2026-v2"
+        },
+        {
+            "id": "app_nos_002",
+            "application_no": "TSF-2026-003491",
+            "applicant_id": "stu_birsa_02",
+            "scheme_id": "scheme_nos",
+            "academic_year": "2025-26",
+            "current_stage": "INSTITUTION_VERIFICATION",
+            "declared_income": 420000.0,
+            "declared_percentage": 82.1,
+            "normalized_percentage": 82.1,
+            "course_name": "M.S. in Renewable Energy Systems",
+            "institute_aishe": "FOR-5501",
+            "institute_name": "University of Manchester (UK)",
+            "status": "IN_PROGRESS",
+            "evaluated_policy_version": "NOS-2025-v1"
+        }
+    ]
+
+    for a_item in app_data:
+        existing_app = db.query(Application).filter(Application.id == a_item["id"]).first()
+        if not existing_app:
+            app_obj = Application(
+                id=a_item["id"],
+                application_no=a_item["application_no"],
+                applicant_id=a_item["applicant_id"],
+                scheme_id=a_item["scheme_id"],
+                academic_year=a_item["academic_year"],
+                current_stage=a_item["current_stage"],
+                submission_date=datetime.datetime.utcnow() - datetime.timedelta(days=15),
+                declared_income=a_item["declared_income"],
+                declared_percentage=a_item["declared_percentage"],
+                normalized_percentage=a_item["normalized_percentage"],
+                course_name=a_item["course_name"],
+                institute_aishe=a_item["institute_aishe"],
+                institute_name=a_item["institute_name"],
+                status=a_item["status"],
+                evaluated_policy_version=a_item["evaluated_policy_version"]
+            )
+            db.add(app_obj)
+
+    db.flush()
+
+    # 5. Seed Structured Policies, Clauses, and Rules
+    policies_data = [
+        {
+            "id": "pol_nfst_2025_v1",
+            "scheme_id": "scheme_nfst",
+            "policy_name": "National Fellowship for Higher Education of ST Students - Operating Guidelines 2025",
+            "policy_type": "GUIDELINE",
+            "version": "NFST-2025-v1",
+            "status": "SUPERSEDED",
+            "effective_from": datetime.datetime(2024, 4, 1),
+            "effective_to": datetime.datetime(2025, 3, 31),
+            "publication_date": "01 Apr 2024",
+            "source_title": "Official NFST Guidelines 2024-25",
+            "source_url": "https://fellowship.tribal.gov.in/guidelines/NFST_2024_25.pdf",
+            "source_page": 4,
+            "approved_by": "Director (Tribal Education), MoTA",
+            "approved_at": datetime.datetime(2024, 3, 28),
+            "notes": "Superseded by NFST-2026-v2 on 2025-04-01.",
+            "clauses": [
+                {
+                    "id": "cls_nfst_v1_01",
+                    "section": "Clause 4.1",
+                    "heading": "Academic Eligibility",
+                    "original_text": "Candidate must secure minimum 50% marks in PG.",
+                    "source_reference": "NFST Guidelines 2024-25, Section 4.1, p.4",
+                    "rules": [
+                        {
+                            "id": "NFST-ELIG-V1-01",
+                            "rule_type": "ACADEMIC",
+                            "field": "minimum_marks",
+                            "operator": "GREATER_THAN_OR_EQUAL",
+                            "value": "50",
+                            "unit": "%",
+                            "priority": 1,
+                            "source_reference": "NFST Guidelines 2024-25, Section 4.1, p.4"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "pol_nfst_2026_v2",
+            "scheme_id": "scheme_nfst",
+            "policy_name": "National Fellowship for Higher Education of ST Students - Revised Framework 2026-27",
+            "policy_type": "GUIDELINE",
+            "version": "NFST-2026-v2",
+            "status": "ACTIVE",
+            "effective_from": datetime.datetime(2025, 4, 1),
+            "effective_to": None,
+            "publication_date": "01 Apr 2025",
+            "source_title": "Official NFST Operational Framework 2025-26",
+            "source_url": "https://fellowship.tribal.gov.in/guidelines/NFST_Guidelines_2025_26.pdf",
+            "source_page": 12,
+            "approved_by": "Joint Secretary (Tribal Welfare), MoTA",
+            "approved_at": datetime.datetime(2025, 3, 30),
+            "supersedes_policy_version": "NFST-2025-v1",
+            "notes": "Current operative policy for all Fellowship awards.",
+            "clauses": [
+                {
+                    "id": "cls_nfst_v2_01",
+                    "section": "Clause 4.1",
+                    "heading": "Tribal Domicile & Community Certification",
+                    "original_text": "The candidate must belong to a notified Scheduled Tribe (ST) community and possess a valid digitally verifiable Caste Certificate issued by the competent revenue authority.",
+                    "source_reference": "NFST Guideline 2025-26, Section 4.1, p.12",
+                    "rules": [
+                        {
+                            "id": "NFST-ELIG-001",
+                            "rule_type": "ELIGIBILITY",
+                            "field": "caste_tribe",
+                            "operator": "EQUALS",
+                            "value": "ST",
+                            "unit": "CATEGORY",
+                            "priority": 1,
+                            "source_reference": "NFST Guideline 2025-26, Section 4.1, p.12"
+                        }
+                    ]
+                },
+                {
+                    "id": "cls_nfst_v2_02",
+                    "section": "Clause 4.2",
+                    "heading": "Academic Eligibility & PG Marks Cutoff",
+                    "original_text": "The candidate must have secured at least 55% marks or equivalent CGPA in Post-Graduate examination from a UGC-recognized university.",
+                    "source_reference": "NFST Guideline 2025-26, Section 4.2, p.12",
+                    "rules": [
+                        {
+                            "id": "NFST-ACAD-002",
+                            "rule_type": "ACADEMIC",
+                            "field": "minimum_marks",
+                            "operator": "GREATER_THAN_OR_EQUAL",
+                            "value": "55",
+                            "unit": "%",
+                            "priority": 2,
+                            "source_reference": "NFST Guideline 2025-26, Section 4.2, p.12"
+                        }
+                    ]
+                },
+                {
+                    "id": "cls_nfst_v2_03",
+                    "section": "Clause 4.3",
+                    "heading": "Annual Family Income Ceiling",
+                    "original_text": "Total family income from all sources must not exceed ₹6,00,000 per annum for fellowship awards.",
+                    "source_reference": "NFST Guideline 2025-26, Section 4.3, p.13",
+                    "rules": [
+                        {
+                            "id": "NFST-INCOME-003",
+                            "rule_type": "INCOME",
+                            "field": "family_income",
+                            "operator": "LESS_THAN_OR_EQUAL",
+                            "value": "600000",
+                            "unit": "INR",
+                            "priority": 3,
+                            "source_reference": "NFST Guideline 2025-26, Section 4.3, p.13"
+                        }
+                    ]
+                },
+                {
+                    "id": "cls_nfst_v2_04",
+                    "section": "Clause 7.2",
+                    "heading": "Monthly Fellowship & Contingency Rates",
+                    "original_text": "The fellowship amount shall be ₹35,000 per month for JRF (first 2 years) and ₹38,000 per month for SRF (remaining tenure).",
+                    "source_reference": "NFST Guideline 2025-26, Section 7.2, p.15",
+                    "rules": [
+                        {
+                            "id": "NFST-BENEFIT-004",
+                            "rule_type": "BENEFIT",
+                            "field": "stipend_monthly",
+                            "operator": "EQUALS",
+                            "value": "35000",
+                            "unit": "INR/MONTH",
+                            "priority": 4,
+                            "source_reference": "NFST Guideline 2025-26, Section 7.2, p.15"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "pol_nos_2025_v1",
+            "scheme_id": "scheme_nos",
+            "policy_name": "National Overseas Scholarship for ST Students - Regulations 2025-26",
+            "policy_type": "GUIDELINE",
+            "version": "NOS-2025-v1",
+            "status": "ACTIVE",
+            "effective_from": datetime.datetime(2025, 4, 1),
+            "effective_to": None,
+            "publication_date": "01 Apr 2025",
+            "source_title": "National Overseas Scholarship Official Regulations",
+            "source_url": "https://overseas.tribal.gov.in/circulars/NOS_Guidelines_2025_26.pdf",
+            "source_page": 3,
+            "approved_by": "Joint Secretary (Scholarships), MoTA",
+            "approved_at": datetime.datetime(2025, 3, 29),
+            "notes": "Covers overseas Master's and Ph.D. in top 500 QS institutions.",
+            "clauses": [
+                {
+                    "id": "cls_nos_01",
+                    "section": "Clause 3.1",
+                    "heading": "Income Ceiling",
+                    "original_text": "Total family income ceiling for National Overseas Scholarship is ₹8,00,000 per annum.",
+                    "source_reference": "NOS Regulations 2025-26, Section 3.1, p.3",
+                    "rules": [
+                        {
+                            "id": "NOS-INCOME-001",
+                            "rule_type": "INCOME",
+                            "field": "family_income",
+                            "operator": "LESS_THAN_OR_EQUAL",
+                            "value": "800000",
+                            "unit": "INR",
+                            "priority": 1,
+                            "source_reference": "NOS Regulations 2025-26, Section 3.1, p.3"
+                        }
+                    ]
+                },
+                {
+                    "id": "cls_nos_02",
+                    "section": "Clause 3.2",
+                    "heading": "Academic Requirement",
+                    "original_text": "Minimum 60% marks or equivalent in qualifying degree is mandatory.",
+                    "source_reference": "NOS Regulations 2025-26, Section 3.2, p.3",
+                    "rules": [
+                        {
+                            "id": "NOS-ACAD-002",
+                            "rule_type": "ACADEMIC",
+                            "field": "minimum_marks",
+                            "operator": "GREATER_THAN_OR_EQUAL",
+                            "value": "60",
+                            "unit": "%",
+                            "priority": 2,
+                            "source_reference": "NOS Regulations 2025-26, Section 3.2, p.3"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "pol_topclass_2025_v1",
+            "scheme_id": "scheme_topclass",
+            "policy_name": "National Scholarship for Higher Education (Top Class) Guidelines",
+            "policy_type": "GUIDELINE",
+            "version": "TOPCLASS-2025-v1",
+            "status": "ACTIVE",
+            "effective_from": datetime.datetime(2025, 4, 1),
+            "effective_to": None,
+            "publication_date": "01 Apr 2025",
+            "source_title": "MoTA Top Class Notified Institutions Manual",
+            "source_url": "https://tribal.gov.in/schemes/TopClass_Manual.pdf",
+            "source_page": 2,
+            "approved_by": "Director (MoTA)",
+            "approved_at": datetime.datetime(2025, 3, 25),
+            "clauses": [
+                {
+                    "id": "cls_topclass_01",
+                    "section": "Clause 2.1",
+                    "heading": "Income Limit",
+                    "original_text": "Total family income from all sources must not exceed ₹6,00,000 per annum.",
+                    "source_reference": "Top Class Manual, Clause 2.1, p.2",
+                    "rules": [
+                        {
+                            "id": "TOPCLASS-INCOME-001",
+                            "rule_type": "INCOME",
+                            "field": "family_income",
+                            "operator": "LESS_THAN_OR_EQUAL",
+                            "value": "600000",
+                            "unit": "INR",
+                            "priority": 1,
+                            "source_reference": "Top Class Manual, Clause 2.1, p.2"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "pol_postmatric_2025_v1",
+            "scheme_id": "scheme_postmatric",
+            "policy_name": "Centrally Sponsored Post-Matric Scholarship for ST - Operational Framework",
+            "policy_type": "GUIDELINE",
+            "version": "POSTMATRIC-2025-v1",
+            "status": "ACTIVE",
+            "effective_from": datetime.datetime(2025, 4, 1),
+            "effective_to": None,
+            "publication_date": "01 Apr 2025",
+            "source_title": "Post-Matric Scholarship Scheme Guidelines (NSP)",
+            "source_url": "https://scholarships.gov.in/schemes/MoTA_PostMatric_Guidelines.pdf",
+            "source_page": 2,
+            "approved_by": "Joint Secretary (Scholarships), MoTA",
+            "approved_at": datetime.datetime(2025, 3, 20),
+            "clauses": [
+                {
+                    "id": "cls_postmatric_01",
+                    "section": "Clause 2.1",
+                    "heading": "Parental Income Limit",
+                    "original_text": "Scholarships will be paid to students whose parents/guardians' annual income does not exceed ₹2,50,000.",
+                    "source_reference": "Post-Matric Guidelines, Clause 2.1, p.2",
+                    "rules": [
+                        {
+                            "id": "POSTMATRIC-INCOME-001",
+                            "rule_type": "INCOME",
+                            "field": "family_income",
+                            "operator": "LESS_THAN_OR_EQUAL",
+                            "value": "250000",
+                            "unit": "INR",
+                            "priority": 1,
+                            "source_reference": "Post-Matric Guidelines, Clause 2.1, p.2"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+
+    for p_info in policies_data:
+        existing_pol = db.query(Policy).filter(Policy.id == p_info["id"]).first()
+        if not existing_pol:
+            pol_obj = Policy(
+                id=p_info["id"],
+                scheme_id=p_info["scheme_id"],
+                policy_name=p_info["policy_name"],
+                policy_type=p_info["policy_type"],
+                version=p_info["version"],
+                status=p_info["status"],
+                effective_from=p_info["effective_from"],
+                effective_to=p_info.get("effective_to"),
+                publication_date=p_info.get("publication_date"),
+                source_title=p_info["source_title"],
+                source_url=p_info.get("source_url"),
+                source_page=p_info.get("source_page"),
+                approved_by=p_info.get("approved_by"),
+                approved_at=p_info.get("approved_at"),
+                supersedes_policy_version=p_info.get("supersedes_policy_version"),
+                notes=p_info.get("notes"),
+                created_at=datetime.datetime.utcnow()
+            )
+            db.add(pol_obj)
             db.flush()
 
-            # Add Chunks
-            for idx, ch in enumerate(d_info["chunks"]):
-                chunk_obj = DocumentChunk(
-                    id=f"chunk_{doc_obj.id}_{idx+1}",
-                    document_id=doc_obj.id,
-                    chunk_index=idx + 1,
-                    page_number=ch["page"],
-                    section_title=ch["title"],
-                    content=ch["text"]
+            for c_info in p_info.get("clauses", []):
+                cls_obj = PolicyClause(
+                    id=c_info["id"],
+                    policy_id=pol_obj.id,
+                    section=c_info["section"],
+                    heading=c_info["heading"],
+                    original_text=c_info["original_text"],
+                    normalized_text=c_info["original_text"],
+                    source_page=p_info.get("source_page"),
+                    source_reference=c_info["source_reference"],
+                    effective_date=p_info.get("publication_date"),
+                    created_at=datetime.datetime.utcnow()
                 )
-                db.add(chunk_obj)
+                db.add(cls_obj)
+                db.flush()
 
-            # Add Policy Claims
-            for cl in d_info.get("claims", []):
-                claim_obj = PolicyClaim(
-                    id=f"claim_{cl['field']}_{doc_obj.id[:10]}",
-                    scheme_id=d_info["scheme_id"],
-                    source_document_id=doc_obj.id,
-                    claim_type=cl["claim_type"],
-                    field=cl["field"],
-                    operator=cl["operator"],
-                    value=cl["value"],
-                    unit=cl["unit"],
-                    extracted_text=cl["text"],
-                    source_page=cl["page"],
-                    confidence=0.98,
-                    review_status="APPROVED",
-                    approved_by="Joint Secretary (MoTA) / Official Gazette",
-                    approved_at=datetime.datetime.utcnow()
-                )
-                db.add(claim_obj)
+                for r_info in c_info.get("rules", []):
+                    r_obj = PolicyRule(
+                        id=r_info["id"],
+                        clause_id=cls_obj.id,
+                        policy_id=pol_obj.id,
+                        rule_type=r_info["rule_type"],
+                        field=r_info["field"],
+                        operator=r_info["operator"],
+                        value=r_info["value"],
+                        unit=r_info.get("unit"),
+                        priority=r_info.get("priority", 1),
+                        effective_from=p_info.get("publication_date"),
+                        source_reference=r_info["source_reference"],
+                        status="ACTIVE",
+                        created_at=datetime.datetime.utcnow()
+                    )
+                    db.add(r_obj)
+
+    db.flush()
+
+    # 6. Seed Policy Conflict (for Human Conflict Resolution)
+    existing_conf = db.query(PolicyConflict).filter(PolicyConflict.id == "cnf_income_nfst_2026").first()
+    if not existing_conf:
+        # Find claims
+        claim_a = db.query(PolicyClaim).filter(PolicyClaim.field == "family_income", PolicyClaim.scheme_id == "scheme_nfst").first()
+        if claim_a:
+            # Create a second claim representing a recent Gazette Circular
+            claim_b = PolicyClaim(
+                id="claim_gazette_nfst_income_2026",
+                scheme_id="scheme_nfst",
+                source_document_id=claim_a.source_document_id,
+                claim_type="ELIGIBILITY",
+                field="family_income",
+                operator="LESS_THAN_OR_EQUAL",
+                value="800000",
+                unit="INR",
+                extracted_text="MoTA Gazette Notification F.No. 11015/04/2026-Scholarship: The annual family income limit for NFST fellowship is enhanced to ₹8,00,000 per annum with effect from Academic Year 2026-27.",
+                source_page=2,
+                confidence=0.96,
+                review_status="UNDER_REVIEW",
+                created_at=datetime.datetime.utcnow()
+            )
+            db.add(claim_b)
+            db.flush()
+
+            conf_obj = PolicyConflict(
+                id="cnf_income_nfst_2026",
+                scheme_id="scheme_nfst",
+                field="family_income",
+                source_a_id="src_fellowship_portal",
+                claim_a_id=claim_a.id,
+                source_b_id="src_mota_main",
+                claim_b_id=claim_b.id,
+                description="Discrepancy detected between Base Guidelines (₹6,00,000 ceiling, clause 4.1) and Gazette Notification F.No. 11015/04/2026 (₹8,00,000 ceiling). Policy resolution required to establish operational ceiling for AY 2026-27.",
+                status="REQUIRES_HUMAN_REVIEW",
+                created_at=datetime.datetime.utcnow()
+            )
+            db.add(conf_obj)
+
+    # 7. Seed Policy Exceptions (for Exception Case Management)
+    exceptions_data = [
+        {
+            "id": "exc_grading_nitrr_01",
+            "application_id": "app_nfst_001",
+            "scheme_id": "scheme_nfst",
+            "category": "UNMAPPED_GRADING",
+            "description": "Applicant transcript from NIT Raipur uses 10-point CPI grading system (CPI 7.82/10) without standard AI percentage conversion formula.",
+            "evidence": {"cpi": 7.82, "scale": 10.0, "institute": "NIT Raipur"},
+            "policy_version": "NFST-2026-v2",
+            "status": "OPEN"
+        },
+        {
+            "id": "exc_doc_mismatch_02",
+            "application_id": "app_nos_002",
+            "scheme_id": "scheme_nos",
+            "category": "DOCUMENT_INCONSISTENCY",
+            "description": "Applicant father's name spelling discrepancy between Caste Certificate ('Ram Soren') and Income Certificate ('Ram Chandra Soren').",
+            "evidence": {"caste_cert_name": "Ram Soren", "income_cert_name": "Ram Chandra Soren"},
+            "policy_version": "NOS-2025-v1",
+            "status": "UNDER_REVIEW"
+        },
+        {
+            "id": "exc_conflict_03",
+            "application_id": "app_nfst_001",
+            "scheme_id": "scheme_nfst",
+            "category": "POLICY_CONFLICT",
+            "description": "Income ceiling discrepancy between Base Guideline (₹6 Lakh) and Gazette Circular (₹8 Lakh) affects cutoff decision.",
+            "evidence": {"guideline_val": 600000, "gazette_val": 800000},
+            "policy_version": "NFST-2026-v2",
+            "status": "OPEN"
+        }
+    ]
+
+    for exc_item in exceptions_data:
+        existing_exc = db.query(PolicyException).filter(PolicyException.id == exc_item["id"]).first()
+        if not existing_exc:
+            exc_obj = PolicyException(
+                id=exc_item["id"],
+                application_id=exc_item["application_id"],
+                scheme_id=exc_item["scheme_id"],
+                category=exc_item["category"],
+                description=exc_item["description"],
+                evidence=exc_item["evidence"],
+                policy_version=exc_item["policy_version"],
+                status=exc_item["status"],
+                created_at=datetime.datetime.utcnow()
+            )
+            db.add(exc_obj)
+
+    # 8. Seed Policy Snapshots (for Policy Time Travel)
+    existing_snp = db.query(PolicySnapshot).filter(PolicySnapshot.id == "snp_nfst_001_v1").first()
+    if not existing_snp:
+        snp_obj = PolicySnapshot(
+            id="snp_nfst_001_v1",
+            application_id="app_nfst_001",
+            scheme_id="scheme_nfst",
+            policy_id="pol_nfst_2025_v1",
+            policy_version="NFST-2025-v1",
+            stage="APPLICATION_SUBMISSION",
+            applicable_rules=[
+                {"rule_id": "NFST-ELIG-V1-01", "rule_type": "ACADEMIC", "field": "minimum_marks", "operator": "GREATER_THAN_OR_EQUAL", "expected": "50%", "actual": "78.4%", "result": "PASS"}
+            ],
+            input_values={"declared_income": 280000, "declared_percentage": 78.4, "course": "Ph.D. in Metallurgy"},
+            evidence_references=[{"doc_type": "MARKSHEET", "file_name": "PG_Marksheet_NITRR.pdf", "verification": "VERIFIED"}],
+            calculated_results=[{"system_decision": "ELIGIBLE", "confidence": 0.98}],
+            system_decision="ELIGIBLE",
+            human_decision="APPROVED",
+            human_actor="Prof. Amit Tigga (Nodal Officer)",
+            snapshot_timestamp=datetime.datetime(2025, 4, 15, 11, 30, 0),
+            created_at=datetime.datetime(2025, 4, 15, 11, 30, 0)
+        )
+        db.add(snp_obj)
 
     db.commit()
 

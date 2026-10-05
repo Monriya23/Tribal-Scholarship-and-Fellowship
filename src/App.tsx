@@ -47,6 +47,7 @@ import { CandidateComparisonMatrix } from './components/reviewer/CandidateCompar
 // Official Data & Sources (For Ministry / Officer Desks Only)
 import { SourceStatusDashboard } from './components/official/SourceStatusDashboard';
 import { OfficialRAGAssistant } from './components/official/OfficialRAGAssistant';
+import { PolicyGovernanceCenter } from './components/official/PolicyGovernanceCenter';
 
 export function App() {
   const [activeRole, setActiveRole] = useState<UserRole>('applicant');
@@ -342,6 +343,9 @@ export function App() {
             onNavigate={(tab) => setActiveTab(tab)}
           />
         );
+
+      case 'policy_governance':
+        return <PolicyGovernanceCenter />;
 
       case 'scheme_builder':
         return (

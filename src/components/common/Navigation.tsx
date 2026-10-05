@@ -14,7 +14,8 @@ import {
   Landmark, 
   BarChart3, 
   Sliders, 
-  ShieldAlert, 
+  ShieldAlert,
+  ShieldCheck, 
   Sparkles, 
   FileCheck2, 
   Cpu, 
@@ -48,6 +49,7 @@ export type NavTabId =
   | 'state_bottlenecks'
   | 'state_proposals_uc'
   | 'ministry_dashboard'
+  | 'policy_governance'
   | 'scheme_builder'
   | 'screening_selection'
   | 'process_bottlenecks'
@@ -102,6 +104,7 @@ export const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange, 
     if (activeRole === 'ministry_admin') {
       return [
         { id: 'ministry_dashboard' as NavTabId, label: 'National Overview', icon: BarChart3 },
+        { id: 'policy_governance' as NavTabId, label: 'Policy & Governance Center', icon: ShieldCheck },
         { id: 'scheme_builder' as NavTabId, label: 'Scheme & Policy Rules', icon: Sliders },
         { id: 'source_status' as NavTabId, label: 'Official Sources & Sync', icon: Cpu },
         { id: 'audit_trail' as NavTabId, label: 'Audit Trail', icon: ShieldAlert },

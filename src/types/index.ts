@@ -413,3 +413,174 @@ export interface BottleneckMetric {
     oldestPendingDays: number;
   }[];
 }
+
+// =========================================================================
+// STEP 10: POLICY INTELLIGENCE & DECISION GOVERNANCE TYPES
+// =========================================================================
+
+export type PolicyStatus = 'DRAFT' | 'UNDER_REVIEW' | 'APPROVED' | 'ACTIVE' | 'SUPERSEDED' | 'ARCHIVED';
+
+export type PolicyRuleType = 
+  | 'ELIGIBILITY'
+  | 'INCOME'
+  | 'AGE'
+  | 'ACADEMIC'
+  | 'DOCUMENT'
+  | 'INSTITUTION'
+  | 'COURSE'
+  | 'DOMICILE'
+  | 'BENEFIT'
+  | 'SELECTION'
+  | 'RENEWAL'
+  | 'DEADLINE'
+  | 'EXCEPTION'
+  | 'PAYMENT';
+
+export type ExceptionCategory =
+  | 'POLICY_CONFLICT'
+  | 'MISSING_AUTHORITATIVE_SOURCE'
+  | 'UNMAPPED_GRADING'
+  | 'DOCUMENT_INCONSISTENCY'
+  | 'INSTITUTION_UNAVAILABLE'
+  | 'STATE_SPECIFIC_RULE'
+  | 'BENEFIT_OVERLAP'
+  | 'DEADLINE_EXCEPTION'
+  | 'HUMAN_ESCALATION';
+
+export type ExceptionStatus = 'OPEN' | 'ASSIGNED' | 'UNDER_REVIEW' | 'RESOLVED' | 'ESCALATED' | 'CLOSED';
+
+export interface PolicyRuleItem {
+  id: string;
+  clause_id?: string;
+  policy_id?: string;
+  rule_type: PolicyRuleType;
+  field: string;
+  operator: 'LESS_THAN_OR_EQUAL' | 'GREATER_THAN_OR_EQUAL' | 'EQUALS' | 'IN' | 'CONTAINS' | 'EXISTS';
+  value: string;
+  unit?: string;
+  condition?: string;
+  action?: string;
+  priority?: number;
+  effective_from?: string;
+  effective_to?: string;
+  source_reference: string;
+  status?: string;
+  created_at?: string;
+}
+
+export interface PolicyClauseItem {
+  id: string;
+  policy_id: string;
+  section: string;
+  heading: string;
+  original_text: string;
+  normalized_text?: string;
+  source_page?: number;
+  source_reference: string;
+  effective_date?: string;
+  rules: PolicyRuleItem[];
+  created_at?: string;
+}
+
+export interface PolicyItem {
+  id: string;
+  scheme_id: string;
+  scheme_code: string;
+  scheme_name: string;
+  policy_name: string;
+  policy_type: string;
+  version: string;
+  status: PolicyStatus;
+  effective_from: string;
+  effective_to?: string;
+  publication_date?: string;
+  source_title: string;
+  source_url?: string;
+  source_document_id?: string;
+  source_page?: number;
+  extracted_at?: string;
+  approved_at?: string;
+  approved_by?: string;
+  supersedes_policy_version?: string;
+  notes?: string;
+  rules_count?: number;
+  clauses_count?: number;
+  clauses?: PolicyClauseItem[];
+  rules?: PolicyRuleItem[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface PolicySnapshotItem {
+  id: string;
+  application_id: string;
+  scheme_id: string;
+  policy_id?: string;
+  policy_version: string;
+  stage: string;
+  applicable_rules: any[];
+  input_values: Record<string, any>;
+  evidence_references: any[];
+  calculated_results: any[];
+  system_decision: string;
+  human_decision?: string;
+  human_override_reason?: string;
+  human_actor?: string;
+  snapshot_timestamp: string;
+  created_at: string;
+}
+
+export interface PolicySimulationResultItem {
+  application_id: string;
+  application_no: string;
+  applicant_name: string;
+  current_status: string;
+  impact_category: string;
+  details: string[];
+}
+
+export interface PolicySimulationItem {
+  id: string;
+  scheme_id: string;
+  scheme_code?: string;
+  base_policy_version: string;
+  proposed_policy_version: string;
+  proposed_change_description: string;
+  rule_changes: {
+    field: string;
+    operator: string;
+    value: string;
+    old_value?: string;
+    unit?: string;
+  }[];
+  total_analyzed: number;
+  potentially_affected: number;
+  eligibility_outcome_changes: number;
+  verification_outcome_changes: number;
+  manual_review_required: number;
+  simulation_results: PolicySimulationResultItem[];
+  simulated_by: string;
+  is_sandbox: boolean;
+  created_at: string;
+}
+
+export interface PolicyExceptionItem {
+  id: string;
+  application_id: string;
+  application_no?: string;
+  applicant_name?: string;
+  scheme_id?: string;
+  scheme_code?: string;
+  category: ExceptionCategory;
+  description: string;
+  evidence: Record<string, any>;
+  policy_version: string;
+  assigned_to?: string;
+  status: ExceptionStatus;
+  resolution?: string;
+  resolution_reason?: string;
+  resolved_by?: string;
+  resolved_at?: string;
+  created_at: string;
+}
+

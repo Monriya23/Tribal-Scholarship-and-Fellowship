@@ -192,7 +192,68 @@ export class OfficialApiService {
     return await res.json();
   }
 
-  // Policy Claims & Reviews
+  // =========================================================================
+  // STEP 10: POLICY INTELLIGENCE & DECISION GOVERNANCE API
+  // =========================================================================
+
+  // 1. Policies & Versions
+  static async getPolicies(schemeCode?: string, status?: string): Promise<any[]> {
+    try {
+      let url = `${API_BASE_URL}/policy/policies`;
+      const params = new URLSearchParams();
+      if (schemeCode) params.append('scheme_code', schemeCode);
+      if (status) params.append('status', status);
+      if (params.toString()) url += `?${params.toString()}`;
+
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  static async getPolicyDetail(policyId: string): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/policy/policies/${policyId}`);
+    return await res.json();
+  }
+
+  static async createPolicy(policyData: any): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/policy/policies`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(policyData)
+    });
+    return await res.json();
+  }
+
+  static async updatePolicyStatus(
+    policyId: string,
+    status: 'DRAFT' | 'UNDER_REVIEW' | 'APPROVED' | 'ACTIVE' | 'SUPERSEDED' | 'ARCHIVED',
+    actorName: string = 'Authorized Officer',
+    notes?: string
+  ): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/policy/policies/${policyId}/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status, actor_name: actorName, notes })
+    });
+    return await res.json();
+  }
+
+  static async getApplicablePolicy(schemeId: string, targetDate?: string): Promise<any> {
+    try {
+      let url = `${API_BASE_URL}/policy/applicable?scheme_id=${encodeURIComponent(schemeId)}`;
+      if (targetDate) url += `&target_date=${encodeURIComponent(targetDate)}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // 2. Policy Claims & Reviews
   static async getPolicyClaims(schemeCode?: string, status?: string): Promise<PolicyClaimItem[]> {
     try {
       let url = `${API_BASE_URL}/policy/claims`;
@@ -228,7 +289,7 @@ export class OfficialApiService {
     return await res.json();
   }
 
-  // Conflicts
+  // 3. Conflicts
   static async getPolicyConflicts(): Promise<PolicyConflictItem[]> {
     try {
       const res = await fetch(`${API_BASE_URL}/policy/conflicts`);
@@ -253,6 +314,118 @@ export class OfficialApiService {
         resolver_name: resolverName,
         resolution_notes: resolutionNotes
       })
+    });
+    return await res.json();
+  }
+
+  // 4. Policy Change Impact Simulator (Sandbox)
+  static async simulatePolicyChange(simulationReq: {
+    scheme_id: string;
+    base_policy_version: string;
+    proposed_policy_version: string;
+    proposed_change_description: string;
+    rule_changes: Array<{
+      field: string;
+      operator: string;
+      value: string;
+      old_value?: string;
+      unit?: string;
+    }>;
+    simulated_by?: string;
+  }): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/policy/simulate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...simulationReq,
+        simulated_by: simulationReq.simulated_by || 'Ministry Policy Admin'
+      })
+    });
+    return await res.json();
+  }
+
+  static async getPolicySimulations(): Promise<any[]> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/policy/simulations`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // 5. Policy Snapshots & Decision Time Travel
+  static async getApplicationSnapshots(applicationId: string): Promise<any[]> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/policy/snapshots/${applicationId}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  static async createDecisionSnapshot(snapshotReq: any): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/policy/snapshots`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(snapshotReq)
+    });
+    return await res.json();
+  }
+
+  // 6. Exception Engine
+  static async getPolicyExceptions(status?: string, category?: string): Promise<any[]> {
+    try {
+      let url = `${API_BASE_URL}/policy/exceptions`;
+      const params = new URLSearchParams();
+      if (status) params.append('status', status);
+      if (category) params.append('category', category);
+      if (params.toString()) url += `?${params.toString()}`;
+
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  static async resolvePolicyException(
+    exceptionId: string,
+    resolution: string,
+    resolutionReason: string,
+    resolvedBy: string = 'Authorized Nodal Officer'
+  ): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/policy/exceptions/${exceptionId}/resolve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        resolution,
+        resolution_reason: resolutionReason,
+        resolved_by: resolvedBy
+      })
+    });
+    return await res.json();
+  }
+
+  // 7. Human Override Governance
+  static async recordHumanOverride(overrideReq: {
+    application_id: string;
+    decision_type: string;
+    previous_system_result: string;
+    final_human_result: string;
+    reason: string;
+    actor: string;
+    actor_role: string;
+    policy_version: string;
+    evidence_reference?: string;
+    comments?: string;
+  }): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/policy/override`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(overrideReq)
     });
     return await res.json();
   }

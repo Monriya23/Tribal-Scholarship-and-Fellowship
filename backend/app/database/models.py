@@ -131,6 +131,7 @@ class Scheme(Base):
     
     versions = relationship("SchemeVersion", back_populates="scheme", cascade="all, delete-orphan")
     claims = relationship("PolicyClaim", back_populates="scheme", cascade="all, delete-orphan")
+    policies = relationship("Policy", back_populates="scheme", cascade="all, delete-orphan")
     applications = relationship("Application", back_populates="scheme")
 
 class SchemeVersion(Base):
@@ -191,6 +192,136 @@ class PolicyConflict(Base):
     resolution_notes = Column(Text, nullable=True)
     resolved_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class Policy(Base):
+    __tablename__ = "policies"
+    
+    id = Column(String, primary_key=True, index=True)  # e.g. "pol_nfst_2026_v2"
+    scheme_id = Column(String, ForeignKey("schemes.id"), nullable=False, index=True)
+    policy_name = Column(String, nullable=False)
+    policy_type = Column(String, default="GUIDELINE")  # GUIDELINE, AMENDMENT, CIRCULAR, NOTIFICATION, GAZETTE, FAQ
+    version = Column(String, nullable=False, index=True)  # e.g. "NFST-2026-v2"
+    status = Column(String, default="DRAFT", index=True)  # DRAFT, UNDER_REVIEW, APPROVED, ACTIVE, SUPERSEDED, ARCHIVED
+    effective_from = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
+    effective_to = Column(DateTime, nullable=True)
+    publication_date = Column(String, nullable=True)
+    source_title = Column(String, nullable=False)
+    source_url = Column(String, nullable=True)
+    source_document_id = Column(String, ForeignKey("source_documents.id"), nullable=True)
+    source_page = Column(Integer, nullable=True)
+    extracted_at = Column(DateTime, default=datetime.datetime.utcnow)
+    approved_at = Column(DateTime, nullable=True)
+    approved_by = Column(String, nullable=True)
+    supersedes_policy_version = Column(String, nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    
+    scheme = relationship("Scheme", back_populates="policies")
+    clauses = relationship("PolicyClause", back_populates="policy", cascade="all, delete-orphan")
+    rules = relationship("PolicyRule", back_populates="policy", cascade="all, delete-orphan")
+
+class PolicyClause(Base):
+    __tablename__ = "policy_clauses"
+    
+    id = Column(String, primary_key=True, index=True)  # e.g. "cls_nfst_4_2"
+    policy_id = Column(String, ForeignKey("policies.id"), nullable=False, index=True)
+    section = Column(String, nullable=False)  # e.g. "Section 4.2", "Eligibility"
+    heading = Column(String, nullable=False)
+    original_text = Column(Text, nullable=False)
+    normalized_text = Column(Text, nullable=True)
+    source_page = Column(Integer, nullable=True)
+    source_reference = Column(String, nullable=False)
+    effective_date = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    policy = relationship("Policy", back_populates="clauses")
+    rules = relationship("PolicyRule", back_populates="clause", cascade="all, delete-orphan")
+
+class PolicyRule(Base):
+    __tablename__ = "policy_rules"
+    
+    id = Column(String, primary_key=True, index=True)  # e.g. "NFST-ELIG-001"
+    clause_id = Column(String, ForeignKey("policy_clauses.id"), nullable=False, index=True)
+    policy_id = Column(String, ForeignKey("policies.id"), nullable=False, index=True)
+    rule_type = Column(String, default="ELIGIBILITY")  # ELIGIBILITY, INCOME, AGE, ACADEMIC, DOCUMENT, INSTITUTION, COURSE, DOMICILE, BENEFIT, SELECTION, RENEWAL, DEADLINE, EXCEPTION, PAYMENT
+    field = Column(String, nullable=False)  # family_income, caste, qualifying_exam, minimum_marks, age_limit
+    operator = Column(String, nullable=False)  # LESS_THAN_OR_EQUAL, GREATER_THAN_OR_EQUAL, EQUALS, IN, CONTAINS, EXISTS
+    value = Column(String, nullable=False)
+    unit = Column(String, nullable=True)  # INR, PERCENT, YEARS, QS_RANK, BOOLEAN
+    condition = Column(String, nullable=True)
+    action = Column(String, default="PASS")
+    priority = Column(Integer, default=1)
+    effective_from = Column(String, nullable=True)
+    effective_to = Column(String, nullable=True)
+    source_reference = Column(String, nullable=False)
+    status = Column(String, default="ACTIVE")
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    clause = relationship("PolicyClause", back_populates="rules")
+    policy = relationship("Policy", back_populates="rules")
+
+class PolicySnapshot(Base):
+    __tablename__ = "policy_snapshots"
+    
+    id = Column(String, primary_key=True, index=True, default=lambda: f"snp_{uuid.uuid4().hex[:10]}")
+    application_id = Column(String, ForeignKey("applications.id"), nullable=False, index=True)
+    scheme_id = Column(String, ForeignKey("schemes.id"), nullable=False, index=True)
+    policy_id = Column(String, nullable=True)
+    policy_version = Column(String, nullable=False, index=True)
+    stage = Column(String, default="ELIGIBILITY", index=True)
+    applicable_rules = Column(JSON, default=list)
+    input_values = Column(JSON, default=dict)
+    evidence_references = Column(JSON, default=list)
+    calculated_results = Column(JSON, default=list)
+    system_decision = Column(String, nullable=False)  # PASS, FAIL, REVIEW, EXCEPTION, ELIGIBLE, NOT_ELIGIBLE
+    human_decision = Column(String, nullable=True)  # APPROVED, REJECTED, MODIFIED
+    human_override_reason = Column(Text, nullable=True)
+    human_actor = Column(String, nullable=True)
+    snapshot_timestamp = Column(DateTime, default=datetime.datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    application = relationship("Application", back_populates="policy_snapshots")
+
+class PolicySimulation(Base):
+    __tablename__ = "policy_simulations"
+    
+    id = Column(String, primary_key=True, index=True, default=lambda: f"sim_{uuid.uuid4().hex[:10]}")
+    scheme_id = Column(String, nullable=False, index=True)
+    scheme_code = Column(String, nullable=True)
+    base_policy_version = Column(String, nullable=False)
+    proposed_policy_version = Column(String, nullable=False)
+    proposed_change_description = Column(Text, nullable=False)
+    rule_changes = Column(JSON, default=list)
+    total_analyzed = Column(Integer, default=0)
+    potentially_affected = Column(Integer, default=0)
+    eligibility_outcome_changes = Column(Integer, default=0)
+    verification_outcome_changes = Column(Integer, default=0)
+    manual_review_required = Column(Integer, default=0)
+    simulation_results = Column(JSON, default=list)
+    simulated_by = Column(String, nullable=False)
+    is_sandbox = Column(Boolean, default=True)  # Sandboxed: never modifies production application records
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class PolicyException(Base):
+    __tablename__ = "policy_exceptions"
+    
+    id = Column(String, primary_key=True, index=True, default=lambda: f"exc_{uuid.uuid4().hex[:10]}")
+    application_id = Column(String, ForeignKey("applications.id"), nullable=False, index=True)
+    scheme_id = Column(String, nullable=True)
+    category = Column(String, nullable=False, index=True)  # POLICY_CONFLICT, MISSING_AUTHORITATIVE_SOURCE, UNMAPPED_GRADING, DOCUMENT_INCONSISTENCY, INSTITUTION_UNAVAILABLE, STATE_SPECIFIC_RULE, BENEFIT_OVERLAP, DEADLINE_EXCEPTION, HUMAN_ESCALATION
+    description = Column(Text, nullable=False)
+    evidence = Column(JSON, default=dict)
+    policy_version = Column(String, nullable=False)
+    assigned_to = Column(String, nullable=True)
+    status = Column(String, default="OPEN", index=True)  # OPEN, ASSIGNED, UNDER_REVIEW, RESOLVED, ESCALATED, CLOSED
+    resolution = Column(String, nullable=True)  # APPROVED_EXCEPTION, WAIVER_GRANTED, MANUAL_OVERRIDE, REJECTED_EXCEPTION
+    resolution_reason = Column(Text, nullable=True)
+    resolved_by = Column(String, nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    application = relationship("Application", back_populates="exceptions")
 
 class SyncLog(Base):
     __tablename__ = "sync_logs"
@@ -295,6 +426,8 @@ class Application(Base):
     status_history = relationship("ApplicationStatusHistory", back_populates="application", cascade="all, delete-orphan")
     eligibility_results = relationship("EligibilityResult", back_populates="application", cascade="all, delete-orphan")
     selection_results = relationship("SelectionResult", back_populates="application", cascade="all, delete-orphan")
+    policy_snapshots = relationship("PolicySnapshot", back_populates="application", cascade="all, delete-orphan")
+    exceptions = relationship("PolicyException", back_populates="application", cascade="all, delete-orphan")
 
 class ApplicationStatusHistory(Base):
     __tablename__ = "application_status_history"
